@@ -1,0 +1,10 @@
+fastapi==0.100.*
+uvicorn[standard]==0.23.*
+google-cloud-aiplatform==1.*
+google-cloud-storage==2.*
+google-cloud-sql-connector==1.*
+pg8000==1.*
+psycopg2-binary==2.9.*
+python-dotenv==1.*
+python-multipart==0.0.*
+pydantic==1.10.*
