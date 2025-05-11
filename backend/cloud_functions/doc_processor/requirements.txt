@@ -1,0 +1,9 @@
+functions-framework==3.*
+google-cloud-storage==2.*
+google-cloud-documentai==2.*
+google-cloud-aiplatform==1.*
+google-cloud-secret-manager==2.*
+google-cloud-sql-connector==1.*
+pg8000==1.*
+python-dotenv==1.*
+Pillow==9.*
