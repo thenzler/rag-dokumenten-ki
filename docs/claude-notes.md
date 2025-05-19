@@ -1,5 +1,34 @@
 # Claude-interne Notizen zum RAG Dokumenten-KI Projekt
 
+## AKTUELLER NÄCHSTER SCHRITT
+
+**WICHTIG: Immer zuerst hier nachsehen, was als Nächstes zu tun ist!**
+
+### ZU ERLEDIGEN (19.05.2025):
+
+1. **Terraform-Deployment durchführen**:
+   - Mit dem Kunden die Projekt-ID und Region bestätigen
+   - GCS-Bucket für Terraform-State erstellen
+   - Terraform init, plan und apply ausführen
+   - Die generierten Resource-IDs dokumentieren
+
+2. **Document AI Prozessor einrichten**:
+   - Sicherstellen, dass der Prozessor mit dem Namen `rag-pdf-processor` erstellt wird
+   - Testen mit einem Beispiel-PDF
+
+3. **Cloud Function deployen und testen**:
+   - Die Service Account-Berechtigungen überprüfen
+   - Die Umgebungsvariablen entsprechend setzen
+   - Einen Test-Upload durchführen und die Logs überprüfen
+
+4. **Backend-API und Frontend bereitstellen**:
+   - Docker-Images bauen und in Artifact Registry pushen
+   - Cloud Run Services deployen
+   - Endpunkt-URLs dokumentieren
+   - End-to-End-Test durchführen
+
+---
+
 ## Projektstand und Kontext
 
 Dieses Projekt ist eine RAG (Retrieval Augmented Generation) Implementierung auf der Google Cloud Platform. Ich habe es als Architekt und Entwickler betreut und nahezu von Grund auf aufgebaut.
@@ -32,22 +61,6 @@ Ich habe folgende Komponenten implementiert und angepasst:
 4. **CI/CD und Monitoring**:
    - Cloud Build-Konfiguration
    - Deployment-Anleitungen
-
-### Besondere Herausforderungen und Entscheidungen
-
-1. Bei der **Cloud Function** habe ich besonders auf die korrekte Sequenz geachtet:
-   - Datenextraktion → Chunking → Embeddings → Speichern in Vector Search und PostgreSQL
-   - Recursive Character Text Splitting mit Überlappung für bessere Ergebnisse
-
-2. Bei der **FastAPI-Implementierung** ist der "query"-Endpunkt besonders wichtig:
-   - Erstellung des Query-Embeddings
-   - Suche mit Vector Search
-   - Abruf der Chunks aus PostgreSQL
-   - LLM-Anfrage mit Kontext
-
-3. In der **Terraform-Konfiguration** beachten:
-   - Exakte Namen der Ressourcen wie vereinbart
-   - Vector Search braucht richtigen Algorithmus und Konfiguration
 
 ## RAG-Implementierungsdetails
 
@@ -101,26 +114,19 @@ Ich habe folgende Komponenten implementiert und angepasst:
        # Versucht an Absätzen, Sätzen oder Wortgrenzen zu teilen
    ```
 
-## Nächste Schritte
+## Bekannte Probleme und Lösungsansätze
 
-Im Fall einer Unterbrechung sind folgende Punkte wichtig für die Fortführung der Arbeit:
+1. **Vertex AI Vector Search Deployment**:
+   Problem: Das Deployment des Vector Search Index kann länger dauern.
+   Lösung: Beim Terraform Apply Geduld haben; den Status in der GCP Console überwachen.
 
-1. **Deployment und Test**:
-   - Terraform-Infrastruktur bereitstellen
-   - Cloud Function sowie Backend und Frontend deployen
-   - Die Dokumentenverarbeitung mit einem PDF-Test validieren
-   - Die Abfragefunktion mit einfachen Fragen testen
+2. **Document AI Prozessor**:
+   Problem: Muss manuell erstellt werden, da Terraform-Support limitiert ist.
+   Lösung: In GCP Console erstellen und die ID notieren; dann in Umgebungsvariablen verwenden.
 
-2. **Verbesserungen (geplant)**:
-   - Verbesserte Chunking-Strategien je nach Dokumenttyp
-   - Authentifizierung und Autorisierung
-   - Erweiterte UI-Features
-   - Optimierung der Vector Search-Konfiguration
-
-3. **Spezifische Anpassungen für den Kunden**:
-   - Beibehalten der vereinbarten GCP-Ressourcennamen
-   - Eventuell spezifische Dokumenttypen besser unterstützen
-   - Domain-spezifisches Prompt Engineering
+3. **Cloud SQL Verbindung**:
+   Problem: Cloud Function und Cloud Run benötigen korrekte Verbindungsparameter.
+   Lösung: Umgebungsvariablen nutzen und Secret Manager für Passwörter.
 
 ## Ressourcennamen und IDs
 
@@ -138,13 +144,118 @@ Die folgenden IDs sind bereits implementiert und müssen bei einer Fortführung 
 - **Frontend Service**: `rag-frontend-service`
 - **Storage Buckets**: `[PROJEKT_ID]-rag-uploads`, `[PROJEKT_ID]-rag-processed`
 
-## Besondere Anforderungen und Kontext
+## Schrittweise Deployment-Plan
 
-Dies ist ein Solo-Entwicklungsprojekt, das möglichst effizient und mit minimalen Anpassungen implementiert werden soll. Der Kunde legt besonderen Wert auf:
+### Schritt 1: Terraform-Infrastruktur
 
-1. Beibehaltung der festgelegten GCP-Ressourcennamen
-2. Minimale Komplexität bei gleichzeitiger Robustheit
-3. Gute Dokumentation für eventuellen Support
-4. Skalierbarkeit bei Bedarf
+```bash
+# Terraform State Bucket erstellen
+gcloud storage buckets create gs://[PROJEKT_ID]-tf-state --location=europe-west3
 
-Diese Notizen sollen mir helfen, das Projekt jederzeit nahtlos fortzusetzen, selbst wenn es zu einer Unterbrechung kommen sollte.
+# Terraform initialisieren
+cd terraform
+echo 'project_id = "[PROJEKT_ID]"' > terraform.tfvars
+terraform init
+terraform plan -out=terraform.plan
+terraform apply terraform.plan
+
+# Outputs speichern und überprüfen
+terraform output > terraform-outputs.txt
+```
+
+### Schritt 2: Document AI Prozessor
+
+- In GCP Console: Document AI aufrufen
+- Neuen Prozessor vom Typ "Document OCR" erstellen
+- Als Namen `rag-pdf-processor` verwenden
+- Die erzeugte Prozessor-ID notieren
+
+### Schritt 3: Datenbank-Tabellen
+
+```bash
+# Via Cloud SQL Auth Proxy oder Cloud Shell
+gcloud sql connect rag-postgres-instance --user=rag_user
+
+# SQL-Skript aus terraform/db_init.sql ausführen
+```
+
+### Schritt 4: Cloud Function
+
+```bash
+cd backend/cloud_functions/doc_processor
+gcloud functions deploy rag-doc-processor \
+  --gen2 \
+  --runtime=python39 \
+  --region=europe-west3 \
+  --source=. \
+  --entry-point=process_document_gcs \
+  --trigger-event-filters="type=google.cloud.storage.object.v1.finalized" \
+  --trigger-event-filters="bucket=[PROJEKT_ID]-rag-uploads" \
+  --service-account=[CLOUD_FUNCTION_SA_EMAIL] \
+  --set-env-vars="GCP_PROJECT_ID=[PROJEKT_ID],GCP_REGION=europe-west3,DB_INSTANCE_CONNECTION_NAME=[DB_CONNECTION_NAME],DB_NAME=rag_db,DB_USER=rag_user,DB_PASS_SECRET_NAME=rag-db-password,DOCAI_PROCESSOR_ID_PDF=rag-pdf-processor,DOCAI_LOCATION=eu,VERTEX_AI_INDEX_ENDPOINT_ID=rag-document-embeddings-endpoint,VERTEX_AI_DEPLOYED_INDEX_ID=rag-deployed-index"
+```
+
+### Schritt 5: Backend-API
+
+```bash
+# Docker-Image bauen
+docker build -t europe-west3-docker.pkg.dev/[PROJEKT_ID]/rag-docker-repo/rag-api:latest -f backend/api/Dockerfile .
+
+# Authentifizieren und Image pushen
+gcloud auth configure-docker europe-west3-docker.pkg.dev
+docker push europe-west3-docker.pkg.dev/[PROJEKT_ID]/rag-docker-repo/rag-api:latest
+
+# Cloud Run Service deployen
+gcloud run deploy rag-api-service \
+  --image=europe-west3-docker.pkg.dev/[PROJEKT_ID]/rag-docker-repo/rag-api:latest \
+  --platform=managed \
+  --region=europe-west3 \
+  --allow-unauthenticated \
+  --service-account=[CLOUDRUN_SA_EMAIL] \
+  --set-env-vars="PROJECT_ID=[PROJEKT_ID],REGION=europe-west3,UPLOAD_BUCKET=[PROJEKT_ID]-rag-uploads,DB_CONNECTION_NAME=[DB_CONNECTION_NAME],DB_NAME=rag_db,DB_USER=rag_user,DB_PASSWORD_SECRET_ID=rag-db-password,VECTOR_INDEX_ID=rag-document-embeddings,VECTOR_ENDPOINT_ID=rag-document-embeddings-endpoint,VECTOR_DEPLOYED_INDEX_ID=rag-deployed-index"
+```
+
+### Schritt 6: Frontend
+
+```bash
+# API-URL aktualisieren in Dockerfile
+vi frontend/Dockerfile
+# NEXT_PUBLIC_API_URL auf die tatsächliche API-URL setzen
+
+# Docker-Image bauen
+docker build -t europe-west3-docker.pkg.dev/[PROJEKT_ID]/rag-docker-repo/rag-frontend:latest -f frontend/Dockerfile .
+docker push europe-west3-docker.pkg.dev/[PROJEKT_ID]/rag-docker-repo/rag-frontend:latest
+
+# Cloud Run Service deployen
+gcloud run deploy rag-frontend-service \
+  --image=europe-west3-docker.pkg.dev/[PROJEKT_ID]/rag-docker-repo/rag-frontend:latest \
+  --platform=managed \
+  --region=europe-west3 \
+  --allow-unauthenticated
+```
+
+## Test-Plan nach Deployment
+
+1. **Upload testen**:
+   - Frontend-URL öffnen
+   - Ein PDF-Dokument hochladen
+   - Cloud Function-Logs prüfen
+   - In Cloud SQL und Vector Search Index prüfen, ob Daten gespeichert wurden
+
+2. **Abfrage testen**:
+   - Eine einfache Frage zum Inhalt des hochgeladenen Dokuments stellen
+   - Antwort und Quellenangaben überprüfen
+
+## Zukünftige Verbesserungen
+
+Nach erfolgreichem MVP-Deployment können folgende Verbesserungen implementiert werden:
+
+1. **Authentifizierung und Autorisierung**
+2. **Verbesserte Chunking-Strategien**
+3. **UI/UX-Verbesserungen**
+4. **Monitoring und Logging-Optimierung**
+5. **Caching für häufige Anfragen**
+
+---
+
+**WICHTIG**: Nach jedem größeren Arbeitsschritt diese Datei aktualisieren, insbesondere den Abschnitt "AKTUELLER NÄCHSTER SCHRITT" am Anfang der Datei.
