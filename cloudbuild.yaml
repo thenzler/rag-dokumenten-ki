@@ -1,0 +1,93 @@
+# CI/CD-Konfiguration für Google Cloud Build
+steps:
+  # Backend API - Docker-Image bauen und in Artifact Registry pushen
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-api-image'
+    args: [
+      'build', 
+      '-t', '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-api:${SHORT_SHA}', 
+      '-t', '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-api:latest',
+      '-f', 'backend/api/Dockerfile',
+      '.' 
+    ]
+
+  # Backend API - Image nach Artifact Registry pushen
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-api-image'
+    args: ['push', '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-api:${SHORT_SHA}']
+
+  # Backend API - Latest Tag pushen
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-api-image-latest'
+    args: ['push', '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-api:latest']
+
+  # Frontend - Docker-Image bauen und in Artifact Registry pushen
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-frontend-image'
+    args: [
+      'build', 
+      '-t', '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-frontend:${SHORT_SHA}', 
+      '-t', '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-frontend:latest',
+      '-f', 'frontend/Dockerfile',
+      '.' 
+    ]
+
+  # Frontend - Image nach Artifact Registry pushen
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-frontend-image'
+    args: ['push', '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-frontend:${SHORT_SHA}']
+
+  # Frontend - Latest Tag pushen
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-frontend-image-latest'
+    args: ['push', '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-frontend:latest']
+
+  # Backend API auf Cloud Run deployen
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-api-to-cloud-run'
+    entrypoint: gcloud
+    args: [
+      'run', 'deploy', 'rag-api-service',
+      '--image', '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-api:${SHORT_SHA}',
+      '--region', '${_REGION}',
+      '--platform', 'managed',
+      '--allow-unauthenticated',  # Für Produktion anpassen - ggf. Authentifizierung einrichten
+      '--service-account', '${_CLOUDRUN_SA_EMAIL}',
+      '--set-env-vars', 'PROJECT_ID=${PROJECT_ID},REGION=${_REGION},UPLOAD_BUCKET=${_UPLOAD_BUCKET},DB_CONNECTION_NAME=${_DB_CONNECTION_NAME},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER},DB_PASSWORD_SECRET_ID=${_DB_PASSWORD_SECRET_ID},VECTOR_INDEX_ID=${_VECTOR_INDEX_ID},VECTOR_ENDPOINT_ID=${_VECTOR_ENDPOINT_ID}'
+    ]
+
+  # Frontend auf Cloud Run deployen
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-frontend-to-cloud-run'
+    entrypoint: gcloud
+    args: [
+      'run', 'deploy', 'rag-frontend-service',
+      '--image', '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-frontend:${SHORT_SHA}',
+      '--region', '${_REGION}',
+      '--platform', 'managed',
+      '--allow-unauthenticated',  # Frontend ist üblicherweise öffentlich zugänglich
+      '--set-env-vars', 'NEXT_PUBLIC_API_URL=https://rag-api-service-${_CLOUD_RUN_SERVICE_HASH}.run.app'
+    ]
+
+# Ersatzvariablen für die Konfiguration
+substitutions:
+  _REGION: 'europe-west3'  # GCP-Region
+  _UPLOAD_BUCKET: '${PROJECT_ID}-rag-uploads'  # Upload-Bucket
+  _DB_CONNECTION_NAME: '${PROJECT_ID}:${_REGION}:rag-postgres-instance'  # Cloud SQL Connection Name
+  _DB_NAME: 'rag_db'  # Datenbankname
+  _DB_USER: 'rag_user'  # Datenbankbenutzer
+  _DB_PASSWORD_SECRET_ID: 'rag-db-password'  # Secret ID für das DB-Passwort
+  _VECTOR_INDEX_ID: ''  # Nach Terraform/Infrastruktur-Deployment ausfüllen
+  _VECTOR_ENDPOINT_ID: ''  # Nach Terraform/Infrastruktur-Deployment ausfüllen
+  _CLOUDRUN_SA_EMAIL: 'rag-api-sa@${PROJECT_ID}.iam.gserviceaccount.com'  # Service Account für Cloud Run
+  _CLOUD_RUN_SERVICE_HASH: ''  # Wird automatisch generiert, nach erstem Deployment aktualisieren
+
+# Timeout auf 30 Minuten erhöhen, da der Build und die Deployments einige Zeit dauern können
+timeout: 1800s
+
+# Bilder, die in Cloud Build-Umgebung behalten werden sollen
+images:
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-api:${SHORT_SHA}'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-api:latest'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-frontend:${SHORT_SHA}'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/rag-docker-repo/rag-frontend:latest'
