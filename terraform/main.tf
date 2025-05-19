@@ -105,7 +105,7 @@ resource "google_secret_manager_secret_version" "db_password_version" {
 # Vertex AI Vector Search Index
 resource "google_vertex_ai_index" "vector_index" {
   provider    = google-beta
-  display_name = "rag-document-vector-index"
+  display_name = "rag-document-embeddings"
   description = "Vector index for document embeddings"
   region      = var.region
   
@@ -128,7 +128,7 @@ resource "google_vertex_ai_index" "vector_index" {
 # Vector Search Endpoint
 resource "google_vertex_ai_index_endpoint" "vector_endpoint" {
   provider     = google-beta
-  display_name = "rag-vector-endpoint"
+  display_name = "rag-document-embeddings-endpoint"
   region       = var.region
   
   network      = "projects/${var.project_id}/global/networks/default"
