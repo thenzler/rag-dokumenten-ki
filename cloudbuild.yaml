@@ -53,7 +53,7 @@ steps:
       '--platform', 'managed',
       '--allow-unauthenticated',  # Für Produktion anpassen - ggf. Authentifizierung einrichten
       '--service-account', '${_CLOUDRUN_SA_EMAIL}',
-      '--set-env-vars', 'PROJECT_ID=${PROJECT_ID},REGION=${_REGION},UPLOAD_BUCKET=${_UPLOAD_BUCKET},DB_CONNECTION_NAME=${_DB_CONNECTION_NAME},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER},DB_PASSWORD_SECRET_ID=${_DB_PASSWORD_SECRET_ID},VECTOR_INDEX_ID=${_VECTOR_INDEX_ID},VECTOR_ENDPOINT_ID=${_VECTOR_ENDPOINT_ID}'
+      '--set-env-vars', 'PROJECT_ID=${PROJECT_ID},REGION=${_REGION},UPLOAD_BUCKET=${_UPLOAD_BUCKET},DB_CONNECTION_NAME=${_DB_CONNECTION_NAME},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER},DB_PASSWORD_SECRET_ID=${_DB_PASSWORD_SECRET_ID},VECTOR_INDEX_ID=rag-document-embeddings,VECTOR_ENDPOINT_ID=rag-document-embeddings-endpoint,VECTOR_DEPLOYED_INDEX_ID=rag-deployed-index'
     ]
 
   # Frontend auf Cloud Run deployen
@@ -77,8 +77,6 @@ substitutions:
   _DB_NAME: 'rag_db'  # Datenbankname
   _DB_USER: 'rag_user'  # Datenbankbenutzer
   _DB_PASSWORD_SECRET_ID: 'rag-db-password'  # Secret ID für das DB-Passwort
-  _VECTOR_INDEX_ID: ''  # Nach Terraform/Infrastruktur-Deployment ausfüllen
-  _VECTOR_ENDPOINT_ID: ''  # Nach Terraform/Infrastruktur-Deployment ausfüllen
   _CLOUDRUN_SA_EMAIL: 'rag-api-sa@${PROJECT_ID}.iam.gserviceaccount.com'  # Service Account für Cloud Run
   _CLOUD_RUN_SERVICE_HASH: ''  # Wird automatisch generiert, nach erstem Deployment aktualisieren
 
