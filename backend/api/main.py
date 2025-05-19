@@ -14,15 +14,17 @@ import pg8000
 
 # Konfigurationsvariablen aus Umgebungsvariablen
 PROJECT_ID = os.environ.get('PROJECT_ID')
-REGION = os.environ.get('REGION', 'europe-west1')
+REGION = os.environ.get('REGION', 'europe-west3')
 UPLOAD_BUCKET = os.environ.get('UPLOAD_BUCKET')
 DB_CONNECTION_NAME = os.environ.get('DB_CONNECTION_NAME')
 DB_NAME = os.environ.get('DB_NAME', 'rag_db')
 DB_USER = os.environ.get('DB_USER', 'rag_user')
 DB_PASSWORD_SECRET_ID = os.environ.get('DB_PASSWORD_SECRET_ID', 'rag-db-password')
-VECTOR_INDEX_ID = os.environ.get('VECTOR_INDEX_ID')
-VECTOR_ENDPOINT_ID = os.environ.get('VECTOR_ENDPOINT_ID')
-EMBEDDING_DIMENSION = int(os.environ.get('EMBEDDING_DIMENSION', '768'))
+
+# Spezifische Vector Search und LLM Konfiguration
+VECTOR_INDEX_ID = os.environ.get('VECTOR_INDEX_ID', 'rag-document-embeddings')
+VECTOR_ENDPOINT_ID = os.environ.get('VECTOR_ENDPOINT_ID', 'rag-document-embeddings-endpoint')
+VECTOR_DEPLOYED_INDEX_ID = os.environ.get('VECTOR_DEPLOYED_INDEX_ID', 'rag-deployed-index')
 LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'gemini-1.0-pro')
 
 # Für lokale Entwicklung
@@ -127,11 +129,13 @@ async def query_documents(query: QueryRequest):
     # 2. Ähnliche Chunks finden (Vector Search)
     found_chunks = []
     try:
-        endpoint = aiplatform.MatchingEngineIndexEndpoint(index_endpoint_name=VECTOR_ENDPOINT_ID)
+        # Vertex AI Vector Search Endpoint initialisieren - numerische ID wird automatisch aus dem Namen extrahiert
+        endpoint_name = f"projects/{PROJECT_ID}/locations/{REGION}/indexEndpoints/{VECTOR_ENDPOINT_ID}"
+        endpoint = aiplatform.MatchingEngineIndexEndpoint(index_endpoint_name=endpoint_name)
         
         # Ähnlichkeitssuche durchführen
         response = endpoint.find_neighbors(
-            deployed_index_id=VECTOR_INDEX_ID,
+            deployed_index_id=VECTOR_DEPLOYED_INDEX_ID,
             queries=[query_embedding],
             num_neighbors=query.top_k
         )
